@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAM 图像分割</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 0;
+            min-height: 800px;
+        }
+
+        .sidebar {
+            background: #f8f9fa;
+            padding: 30px;
+            border-right: 1px solid #e0e0e0;
+            overflow-y: auto;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        select, input[type="range"], input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        select:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+
+        input[type="range"] {
+            padding: 0;
+        }
+
+        .value-display {
+            text-align: center;
+            color: #667eea;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        button.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        button.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button.secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        button.secondary:hover {
+            background: #e0e0e0;
+        }
+
+        button.secondary.active {
+            background: #667eea;
+            color: white;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .segment-btn {
+            grid-column: 1 / -1;
+            padding: 15px;
+            font-size: 16px;
+        }
+
+        .stats {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .stat-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .stat-label {
+            color: #666;
+        }
+
+        .stat-value {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .canvas-area {
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .canvas-container {
+            position: relative;
+            background: #f8f9fa;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            cursor: crosshair;
+        }
+
+        canvas {
+            max-width: 100%;
+            max-height: 600px;
+            display: block;
+        }
+
+        .upload-prompt {
+            text-align: center;
+            color: #999;
+            padding: 60px 20px;
+        }
+
+        .upload-prompt i {
+            font-size: 64px;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        /* Mask 高亮样式 */
+        .mask-highlight {
+            position: absolute;
+            pointer-events: none;
+            mix-blend-mode: normal;
+        }
+
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-content {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .point-marker {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .point-positive {
+            background: #00ff00;
+        }
+
+        .point-negative {
+            background: #ff0000;
+        }
+
+        .box-marker {
+            position: absolute;
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+
+        .info-banner {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .info-banner p {
+            margin: 5px 0;
+            font-size: 13px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 SAM HQ 图像分割</h1>
+            <p>支持全图分割、点提示、框提示 | TensorRT 加速</p>
+        </div>
+
+        <div class="main-content">
+            <!-- 侧边栏控制面板 -->
+            <div class="sidebar">
+                <!-- 模型选择 -->
+                <div class="section">
+                    <div class="section-title">模型选择</div>
+                    <div class="control-group">
+                        <label for="modelSelect">选择模型</label>
+                        <select id="modelSelect" disabled>
+                            <option>正在加载模型列表...</option>
+                        </select>
+                        <div id="modelStatus" style="margin-top: 8px; font-size: 12px; color: #666;"></div>
+                    </div>
+                </div>
+
+                <!-- 图片上传 -->
+                <div class="section">
+                    <div class="section-title">图片输入</div>
+                    <div class="control-group">
+                        <label for="imageUpload">上传图片</label>
+                        <input type="file" id="imageUpload" accept="image/*">
+                    </div>
+                </div>
+
+                <!-- Prompt 模式 -->
+                <div class="section">
+                    <div class="section-title">分割模式</div>
+                    <div class="button-group">
+                        <button class="secondary" id="modeAuto">全图</button>
+                        <button class="secondary active" id="modePoint">点</button>
+                        <button class="secondary" id="modeBox">框</button>
+                    </div>
+                    <div class="info-banner" id="modeInfo">
+                        <p><strong>点模式:</strong> 左键添加正样本点，右键添加负样本点</p>
+                    </div>
+                </div>
+
+                <!-- 可视化参数 -->
+                <div class="section">
+                    <div class="section-title">可视化参数</div>
+                    <div class="control-group">
+                        <label for="alphaSlider">透明度 Alpha</label>
+                        <input type="range" id="alphaSlider" min="0" max="1" step="0.1" value="0.5">
+                        <div class="value-display" id="alphaValue">0.5</div>
+                    </div>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="section">
+                    <div class="section-title">操作</div>
+                    <div class="button-group">
+                        <button class="segment-btn primary" id="segmentBtn">
+                            开始分割
+                        </button>
+                    </div>
+                    <div class="button-group">
+                        <button class="secondary" id="clearBtn">清除标注</button>
+                    </div>
+                </div>
+
+                <!-- 下载选项 -->
+                <div class="section">
+                    <div class="section-title">下载</div>
+                    <div class="button-group">
+                        <button class="secondary" id="downloadVisualizationBtn">📥 可视化结果</button>
+                    </div>
+                    <div class="button-group">
+                        <button class="secondary" id="downloadMasksBinaryBtn">📥 二值Mask</button>
+                        <button class="secondary" id="downloadMasksColorBtn">📥 彩色Mask</button>
+                    </div>
+                    <div class="button-group">
+                        <button class="secondary" id="downloadJsonBtn">📥 数据 (JSON)</button>
+                    </div>
+                </div>
+
+                <!-- 性能统计 -->
+                <div class="section">
+                    <div class="section-title">性能统计</div>
+                    <div class="stats" id="stats">
+                        <div class="stat-item">
+                            <span class="stat-label">总耗时:</span>
+                            <span class="stat-value" id="statTotal">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">编码耗时:</span>
+                            <span class="stat-value" id="statEncode">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">推理耗时:</span>
+                            <span class="stat-value" id="statPredict">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">元数据生成:</span>
+                            <span class="stat-value" id="statMetadata">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">显存使用:</span>
+                            <span class="stat-value" id="statMemory">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Mask 数量:</span>
+                            <span class="stat-value" id="statMasks">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 画布区域 -->
+            <div class="canvas-area">
+                <div class="canvas-container" id="canvasContainer">
+                    <div class="upload-prompt" id="uploadPrompt">
+                        <i>📸</i>
+                        <p>请上传图片开始分割</p>
+                    </div>
+                    <canvas id="canvas" style="display: none;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading 遮罩 -->
+    <div class="loading" id="loading" style="display: none;">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p>正在处理...</p>
+        </div>
+    </div>
+
+    <script>
+        // 全局状态
+        const state = {
+            image: null,
+            mode: 'point',  // auto, point, box
+            points: [],  // [{x, y, label}, ...]
+            boxes: [],   // [{x1, y1, x2, y2}, ...]
+            currentBox: null,
+            alpha: 0.5,
+            model: 'vit_b',  // 默认使用 vit_b
+            apiUrl: window.location.origin,  // 使用当前页面的地址
+            originalImage: null,  // 保存原始图像用于重新渲染
+            masksMetadata: [],  // 保存 mask 元数据（RLE、bbox等）
+            maskColors: []  // 保存每个 mask 的颜色
+        };
+
+        // ==================== RLE 解码函数 ====================
+        
+        /**
+         * 从 RLE 编码解码 mask
+         * @param {Object} rle - RLE 对象 {size: [h, w], counts: [len1, len2, ...]}
+         * @returns {Object} - {data: Uint8Array, width: number, height: number}
+         */
+        function rleToMask(rle) {
+            const [height, width] = rle.size;
+            
+            console.log(`🔍 RLE解码: size=${height}x${width}, counts长度=${rle.counts.length}`);
+            console.log(`前10个counts:`, rle.counts.slice(0, 10));
+            
+            // 解码 RLE 游程编码
+            let pos = 0;
+            let value = 0;  // 从 0 开始（背景）
+            const flatMask = new Uint8Array(height * width);
+            
+            for (let count of rle.counts) {
+                const endPos = Math.min(pos + count, height * width);
+                for (let i = pos; i < endPos; i++) {
+                    flatMask[i] = value;
+                }
+                pos = endPos;
+                value = 1 - value;  // 交替 0/1
+            }
+            
+            console.log(`解码完成: 总像素=${pos}, 1的数量=${flatMask.reduce((a,b)=>a+b, 0)}`);
+            
+            // RLE 是按列优先编码的（Python: mask.T.flatten()）
+            // 需要转置回行优先（标准图像格式）
+            const transposed = new Uint8Array(height * width);
+            for (let row = 0; row < height; row++) {
+                for (let col = 0; col < width; col++) {
+                    // flatMask 是列优先：flatMask[col * height + row]
+                    // transposed 是行优先：transposed[row * width + col]
+                    transposed[row * width + col] = flatMask[col * height + row];
+                }
+            }
+            
+            const ones = transposed.reduce((a,b)=>a+b, 0);
+            console.log(`转置完成: 1的数量=${ones}, 面积比例=${(ones/(height*width)*100).toFixed(2)}%`);
+            
+            return { data: transposed, width, height };
+        }
+
+        // 元素引用
+        const elements = {
+            canvas: document.getElementById('canvas'),
+            canvasContainer: document.getElementById('canvasContainer'),
+            uploadPrompt: document.getElementById('uploadPrompt'),
+            imageUpload: document.getElementById('imageUpload'),
+            modelSelect: document.getElementById('modelSelect'),
+            modelStatus: document.getElementById('modelStatus'),
+            alphaSlider: document.getElementById('alphaSlider'),
+            alphaValue: document.getElementById('alphaValue'),
+            segmentBtn: document.getElementById('segmentBtn'),
+            clearBtn: document.getElementById('clearBtn'),
+            downloadVisualizationBtn: document.getElementById('downloadVisualizationBtn'),
+            downloadMasksBinaryBtn: document.getElementById('downloadMasksBinaryBtn'),
+            downloadMasksColorBtn: document.getElementById('downloadMasksColorBtn'),
+            downloadJsonBtn: document.getElementById('downloadJsonBtn'),
+            modeAuto: document.getElementById('modeAuto'),
+            modePoint: document.getElementById('modePoint'),
+            modeBox: document.getElementById('modeBox'),
+            modeInfo: document.getElementById('modeInfo'),
+            loading: document.getElementById('loading'),
+            stats: {
+                total: document.getElementById('statTotal'),
+                encode: document.getElementById('statEncode'),
+                predict: document.getElementById('statPredict'),
+                metadata: document.getElementById('statMetadata'),
+                memory: document.getElementById('statMemory'),
+                masks: document.getElementById('statMasks')
+            }
+        };
+
+        const ctx = elements.canvas.getContext('2d');
+
+        // 事件监听
+        elements.imageUpload.addEventListener('change', handleImageUpload);
+        elements.modelSelect.addEventListener('change', (e) => state.model = e.target.value);
+        elements.alphaSlider.addEventListener('input', (e) => {
+            state.alpha = parseFloat(e.target.value);
+            elements.alphaValue.textContent = state.alpha.toFixed(1);
+            // 如果已有分割结果，实时重新渲染
+            if (state.originalImage && state.maskImages.length > 0) {
+                renderMasksWithAlpha();
+            }
+        });
+        elements.segmentBtn.addEventListener('click', performSegmentation);
+        elements.clearBtn.addEventListener('click', clearAnnotations);
+        
+        // 下载按钮
+        elements.downloadVisualizationBtn.addEventListener('click', downloadVisualization);
+        elements.downloadMasksBinaryBtn.addEventListener('click', downloadMasksBinary);
+        elements.downloadMasksColorBtn.addEventListener('click', downloadMasksColor);
+        elements.downloadJsonBtn.addEventListener('click', downloadJson);
+        
+        // 模式切换
+        elements.modeAuto.addEventListener('click', () => setMode('auto'));
+        elements.modePoint.addEventListener('click', () => setMode('point'));
+        elements.modeBox.addEventListener('click', () => setMode('box'));
+
+        // Canvas 交互
+        elements.canvas.addEventListener('click', handleCanvasClick);
+        elements.canvas.addEventListener('contextmenu', handleCanvasRightClick);
+        elements.canvas.addEventListener('mousedown', handleCanvasMouseDown);
+        elements.canvas.addEventListener('mousemove', handleCanvasMouseMove);
+        elements.canvas.addEventListener('mouseup', handleCanvasMouseUp);
+
+        // 设置模式
+        function setMode(mode) {
+            state.mode = mode;
+            [elements.modeAuto, elements.modePoint, elements.modeBox].forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            if (mode === 'auto') {
+                elements.modeAuto.classList.add('active');
+                elements.modeInfo.innerHTML = '<p><strong>全图模式:</strong> 自动分割整张图片的所有对象</p>';
+            } else if (mode === 'point') {
+                elements.modePoint.classList.add('active');
+                elements.modeInfo.innerHTML = '<p><strong>点模式:</strong> 左键添加正样本点，右键添加负样本点</p>';
+            } else if (mode === 'box') {
+                elements.modeBox.classList.add('active');
+                elements.modeInfo.innerHTML = '<p><strong>框模式:</strong> 拖拽鼠标绘制边界框</p>';
+            }
+            
+            clearAnnotations();
+        }
+
+        // 处理图片上传
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    state.image = img;
+                    
+                    // 设置 canvas 大小
+                    const maxWidth = elements.canvasContainer.clientWidth - 40;
+                    const maxHeight = 600;
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    if (width > maxWidth) {
+                        height = (maxWidth / width) * height;
+                        width = maxWidth;
+                    }
+                    if (height > maxHeight) {
+                        width = (maxHeight / height) * width;
+                        height = maxHeight;
+                    }
+                    
+                    elements.canvas.width = width;
+                    elements.canvas.height = height;
+                    
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    elements.uploadPrompt.style.display = 'none';
+                    elements.canvas.style.display = 'block';
+                    
+                    clearAnnotations();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Canvas 点击 (点模式)
+        function handleCanvasClick(e) {
+            if (state.mode !== 'point' || !state.image) return;
+            
+            const rect = elements.canvas.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * elements.canvas.width;
+            const y = ((e.clientY - rect.top) / rect.height) * elements.canvas.height;
+            
+            // 转换为原始图片坐标
+            const origX = (x / elements.canvas.width) * state.image.width;
+            const origY = (y / elements.canvas.height) * state.image.height;
+            
+            state.points.push({x: origX, y: origY, label: 1, displayX: x, displayY: y});
+            redrawCanvas();
+        }
+
+        // Canvas 右键 (负样本点)
+        function handleCanvasRightClick(e) {
+            e.preventDefault();
+            if (state.mode !== 'point' || !state.image) return;
+            
+            const rect = elements.canvas.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * elements.canvas.width;
+            const y = ((e.clientY - rect.top) / rect.height) * elements.canvas.height;
+            
+            const origX = (x / elements.canvas.width) * state.image.width;
+            const origY = (y / elements.canvas.height) * state.image.height;
+            
+            state.points.push({x: origX, y: origY, label: 0, displayX: x, displayY: y});
+            redrawCanvas();
+        }
+
+        // Canvas 鼠标按下 (框模式)
+        function handleCanvasMouseDown(e) {
+            if (state.mode !== 'box' || !state.image) return;
+            
+            const rect = elements.canvas.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * elements.canvas.width;
+            const y = ((e.clientY - rect.top) / rect.height) * elements.canvas.height;
+            
+            state.currentBox = {startX: x, startY: y, endX: x, endY: y};
+        }
+
+        // Canvas 鼠标移动 (框模式)
+        function handleCanvasMouseMove(e) {
+            if (state.mode !== 'box' || !state.currentBox) return;
+            
+            const rect = elements.canvas.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * elements.canvas.width;
+            const y = ((e.clientY - rect.top) / rect.height) * elements.canvas.height;
+            
+            state.currentBox.endX = x;
+            state.currentBox.endY = y;
+            redrawCanvas();
+        }
+
+        // Canvas 鼠标释放 (框模式)
+        function handleCanvasMouseUp(e) {
+            if (state.mode !== 'box' || !state.currentBox) return;
+            
+            const box = state.currentBox;
+            const x1 = Math.min(box.startX, box.endX);
+            const y1 = Math.min(box.startY, box.endY);
+            const x2 = Math.max(box.startX, box.endX);
+            const y2 = Math.max(box.startY, box.endY);
+            
+            // 转换为原始图片坐标
+            const origX1 = (x1 / elements.canvas.width) * state.image.width;
+            const origY1 = (y1 / elements.canvas.height) * state.image.height;
+            const origX2 = (x2 / elements.canvas.width) * state.image.width;
+            const origY2 = (y2 / elements.canvas.height) * state.image.height;
+            
+            state.boxes.push({
+                x1: origX1, y1: origY1, x2: origX2, y2: origY2,
+                displayX1: x1, displayY1: y1, displayX2: x2, displayY2: y2
+            });
+            
+            state.currentBox = null;
+            redrawCanvas();
+        }
+
+        // 重绘 canvas
+        function redrawCanvas() {
+            if (!state.image) return;
+            
+            ctx.clearRect(0, 0, elements.canvas.width, elements.canvas.height);
+            ctx.drawImage(state.image, 0, 0, elements.canvas.width, elements.canvas.height);
+            
+            // 绘制点
+            state.points.forEach(point => {
+                ctx.beginPath();
+                ctx.arc(point.displayX, point.displayY, 6, 0, 2 * Math.PI);
+                ctx.fillStyle = point.label === 1 ? '#00ff00' : '#ff0000';
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+            
+            // 绘制框
+            state.boxes.forEach(box => {
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(
+                    box.displayX1, box.displayY1,
+                    box.displayX2 - box.displayX1,
+                    box.displayY2 - box.displayY1
+                );
+            });
+            
+            // 绘制当前框
+            if (state.currentBox) {
+                const box = state.currentBox;
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([5, 5]);
+                ctx.strokeRect(
+                    Math.min(box.startX, box.endX),
+                    Math.min(box.startY, box.endY),
+                    Math.abs(box.endX - box.startX),
+                    Math.abs(box.endY - box.startY)
+                );
+                ctx.setLineDash([]);
+            }
+        }
+
+        // 清除标注
+        function clearAnnotations() {
+            state.points = [];
+            state.boxes = [];
+            state.currentBox = null;
+            redrawCanvas();
+        }
+
+        // 执行分割
+        async function performSegmentation() {
+            if (!state.image) {
+                alert('请先上传图片');
+                return;
+            }
+            
+            if (state.mode === 'point' && state.points.length === 0) {
+                alert('请在图片上添加至少一个点');
+                return;
+            }
+            
+            if (state.mode === 'box' && state.boxes.length === 0) {
+                alert('请在图片上绘制至少一个框');
+                return;
+            }
+            
+            elements.loading.style.display = 'flex';
+            
+            try {
+                // 准备请求数据
+                const canvas = document.createElement('canvas');
+                canvas.width = state.image.width;
+                canvas.height = state.image.height;
+                const tempCtx = canvas.getContext('2d');
+                tempCtx.drawImage(state.image, 0, 0);
+                const imageBase64 = canvas.toDataURL('image/png');
+                
+                const requestData = {
+                    model: state.model,
+                    image: imageBase64,
+                    prompt_type: state.mode,
+                    alpha: state.alpha,
+                    use_tensorrt: true
+                };
+                
+                if (state.mode === 'point') {
+                    requestData.points = state.points.map(p => [p.x, p.y, p.label]);
+                } else if (state.mode === 'box') {
+                    requestData.boxes = state.boxes.map(b => [b.x1, b.y1, b.x2, b.y2]);
+                }
+                
+                // 发送请求
+                const response = await fetch(`${state.apiUrl}/api/segment`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(requestData)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || '分割失败');
+                }
+                
+                // 显示结果
+                displayResults(result);
+                
+            } catch (error) {
+                console.error(error);
+                alert('分割失败: ' + error.message);
+            } finally {
+                elements.loading.style.display = 'none';
+            }
+        }
+
+        // ==================== 使用 mask 图像渲染 ====================
+        
+        let renderTimeout = null;
+        function renderMasksWithAlpha() {
+            if (!state.originalImage || state.masksMetadata.length === 0) return;
+            
+            // 防抖：避免拖动时频繁渲染
+            if (renderTimeout) {
+                cancelAnimationFrame(renderTimeout);
+            }
+            
+            renderTimeout = requestAnimationFrame(() => {
+                const width = elements.canvas.width;
+                const height = elements.canvas.height;
+                
+                // 清空 canvas
+                ctx.clearRect(0, 0, width, height);
+                
+                // 绘制原图
+                ctx.drawImage(state.originalImage, 0, 0, width, height);
+                
+                // 创建临时 canvas 用于颜色叠加
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = state.image.width;  // 原始尺寸
+                tempCanvas.height = state.image.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                // 逐个渲染 mask（已经加载为 Image 对象）
+                state.masksMetadata.forEach((metadata) => {
+                    if (!metadata.maskImage || !metadata.maskImage.complete) {
+                        return;  // 跳过未加载的图像
+                    }
+                    
+                    const [r, g, b] = metadata.color;
+                    
+                    // 绘制 mask 图像到临时 canvas
+                    tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+                    tempCtx.drawImage(metadata.maskImage, 0, 0);
+                    
+                    // 获取像素数据
+                    const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+                    const data = imageData.data;
+                    
+                    // 为 mask 区域着色（灰度值 > 128 的像素）
+                    for (let i = 0; i < data.length; i += 4) {
+                        if (data[i] > 128) {  // 白色像素 = mask 区域
+                            data[i] = r;
+                            data[i + 1] = g;
+                            data[i + 2] = b;
+                            data[i + 3] = 255;  // 完全不透明
+                        } else {
+                            data[i + 3] = 0;  // 透明
+                        }
+                    }
+                    
+                    // 绘制回临时 canvas
+                    tempCtx.putImageData(imageData, 0, 0);
+                    
+                    // 以 alpha 混合到主 canvas（缩放到显示尺寸）
+                    ctx.globalAlpha = state.alpha;
+                    ctx.drawImage(tempCanvas, 0, 0, width, height);
+                    ctx.globalAlpha = 1.0;
+                });
+                
+                // 重新绘制标注点和框
+                redrawAnnotations();
+            });
+        }
+        
+        // 仅绘制标注（点和框），不重绘图像
+        function redrawAnnotations() {
+            // 绘制点
+            state.points.forEach(point => {
+                ctx.beginPath();
+                ctx.arc(point.displayX, point.displayY, 6, 0, 2 * Math.PI);
+                ctx.fillStyle = point.label === 1 ? '#00ff00' : '#ff0000';
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+            
+            // 绘制框
+            state.boxes.forEach(box => {
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(
+                    box.displayX1, box.displayY1,
+                    box.displayX2 - box.displayX1,
+                    box.displayY2 - box.displayY1
+                );
+            });
+            
+            // 绘制当前框
+            if (state.currentBox) {
+                const box = state.currentBox;
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([5, 5]);
+                ctx.strokeRect(
+                    Math.min(box.startX, box.endX),
+                    Math.min(box.startY, box.endY),
+                    Math.abs(box.endX - box.startX),
+                    Math.abs(box.endY - box.startY)
+                );
+                ctx.setLineDash([]);
+            }
+        }
+        
+        // 显示结果（mask 图像模式）
+        async function displayResults(result) {
+            // 更新统计信息
+            const perf = result.performance;
+            elements.stats.total.textContent = `${perf.total_time_ms.toFixed(1)} ms`;
+            elements.stats.encode.textContent = `${perf.image_encode_ms.toFixed(1)} ms`;
+            elements.stats.predict.textContent = `${perf.predict_time_ms.toFixed(1)} ms`;
+            elements.stats.metadata.textContent = `${perf.mask_encode_ms.toFixed(1)} ms`;
+            elements.stats.memory.textContent = `${perf.memory_mb.toFixed(1)} MB`;
+            elements.stats.masks.textContent = result.result.info.num_masks;
+            
+            // 保存原始图像
+            state.originalImage = state.image;
+            
+            // 加载 mask 图像
+            const masks = result.result.masks;
+            console.log(`✅ 收到 ${masks.length} 个 mask`);
+            console.log('优化模式:', perf.optimization || 'unknown');
+            
+            // 加载所有 mask 图像
+            const loadPromises = masks.map(maskData => {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        maskData.maskImage = img;  // 保存加载的图像
+                        resolve();
+                    };
+                    img.onerror = reject;
+                    img.src = maskData.mask;  // Base64 图像
+                });
+            });
+            
+            // 等待所有图像加载完成
+            try {
+                await Promise.all(loadPromises);
+                console.log('✅ 所有 mask 图像加载完成');
+                
+                // 保存 mask 元数据
+                state.masksMetadata = masks;
+                
+                // 渲染
+                renderMasksWithAlpha();
+            } catch (error) {
+                console.error('加载 mask 图像失败:', error);
+                alert('加载 mask 图像失败');
+            }
+        }
+
+        // 下载结果
+        // ==================== 下载功能 ====================
+        
+        /**
+         * 下载可视化结果（带透明度的叠加图）
+         */
+        function downloadVisualization() {
+            if (!state.originalImage) {
+                alert('请先上传图片');
+                return;
+            }
+            
+            const link = document.createElement('a');
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            link.download = `segmentation_visualization_${timestamp}.png`;
+            link.href = elements.canvas.toDataURL('image/png');
+            link.click();
+            
+            console.log('已下载可视化结果');
+        }
+
+        /**
+         * 下载所有 mask 的二值图（黑白图）
+         */
+        function downloadMasksBinary() {
+            if (!state.masksMetadata || state.masksMetadata.length === 0) {
+                alert('没有可下载的 mask，请先进行分割');
+                return;
+            }
+
+            state.masksMetadata.forEach((metadata, index) => {
+                // 直接下载 mask 图像（已经是黑白图）
+                const link = document.createElement('a');
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                link.download = `mask_binary_${index + 1}_${timestamp}.png`;
+                link.href = metadata.mask;  // Base64 数据
+                link.click();
+            });
+
+            console.log(`已下载 ${state.masksMetadata.length} 个二值 mask 图片`);
+        }
+
+        /**
+         * 下载所有 mask 的彩色图（保留原始颜色）- 从 RLE 重建
+         */
+        function downloadMasksColor() {
+            if (!state.masksMetadata || state.masksMetadata.length === 0) {
+                alert('没有可下载的 mask，请先进行分割');
+                return;
+            }
+
+            state.masksMetadata.forEach((metadata, index) => {
+                const color = metadata.color;
+                
+                // 创建临时 canvas
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = metadata.maskImage.width;
+                tempCanvas.height = metadata.maskImage.height;
+                const tempCtx = tempCanvas.getContext('2d');
+
+                // 绘制 mask 图像
+                tempCtx.drawImage(metadata.maskImage, 0, 0);
+                
+                // 获取像素数据并着色
+                const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+                const data = imageData.data;
+                
+                for (let i = 0; i < data.length; i += 4) {
+                    if (data[i] > 128) {  // 白色像素 = mask 区域
+                        data[i] = color[0];      // R
+                        data[i + 1] = color[1];  // G
+                        data[i + 2] = color[2];  // B
+                        data[i + 3] = 255;       // A
+                    } else {
+                        data[i + 3] = 0;  // 背景透明
+                    }
+                }
+                
+                tempCtx.putImageData(imageData, 0, 0);
+
+                // 下载
+                const link = document.createElement('a');
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                const colorHex = `${color[0].toString(16).padStart(2, '0')}${color[1].toString(16).padStart(2, '0')}${color[2].toString(16).padStart(2, '0')}`;
+                link.download = `mask_color_${index + 1}_${colorHex}_${timestamp}.png`;
+                link.href = tempCanvas.toDataURL('image/png');
+                link.click();
+            });
+
+            console.log(`已下载 ${state.masksMetadata.length} 个彩色 mask 图片`);
+        }
+
+        /**
+         * 下载 JSON 格式的分割数据（元数据模式）
+         */
+        function downloadJson() {
+            if (!state.masksMetadata || state.masksMetadata.length === 0) {
+                alert('没有可下载的数据，请先进行分割');
+                return;
+            }
+
+            // 准备导出数据（直接使用后端返回的元数据）
+            const exportData = {
+                timestamp: new Date().toISOString(),
+                model: state.model,
+                image: {
+                    width: state.originalImage ? state.originalImage.width : 0,
+                    height: state.originalImage ? state.originalImage.height : 0
+                },
+                mode: state.mode,
+                annotations: {
+                    points: state.points.map(p => ({
+                        x: p.x,
+                        y: p.y,
+                        label: p.label
+                    })),
+                    boxes: state.boxes.map(b => ({
+                        x1: b.x1,
+                        y1: b.y1,
+                        x2: b.x2,
+                        y2: b.y2
+                    }))
+                },
+                masks: state.masksMetadata.map((metadata, index) => ({
+                    id: index + 1,
+                    color: metadata.color,
+                    width: metadata.maskImage.width,
+                    height: metadata.maskImage.height,
+                    bbox: metadata.bbox,
+                    area: metadata.area
+                    // Note: mask 图像本身不导出到 JSON（太大）
+                })),
+                stats: {
+                    maskCount: state.masksMetadata.length,
+                    alpha: state.alpha
+                }
+            };
+
+            // 转换为 JSON 字符串
+            const jsonStr = JSON.stringify(exportData, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            // 下载
+            const link = document.createElement('a');
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            link.download = `segmentation_data_${timestamp}.json`;
+            link.href = url;
+            link.click();
+
+            // 清理
+            URL.revokeObjectURL(url);
+            
+            console.log('已下载 JSON 数据');
+        }
+
+        /**
+         * 压缩 mask 数据（Run Length Encoding）
+         */
+        function compressMaskRLE(mask) {
+            const rle = [];
+            let currentValue = mask[0];
+            let count = 1;
+
+            for (let i = 1; i < mask.length; i++) {
+                if (mask[i] === currentValue) {
+                    count++;
+                } else {
+                    rle.push({ value: currentValue, count: count });
+                    currentValue = mask[i];
+                    count = 1;
+                }
+            }
+            // 添加最后一组
+            rle.push({ value: currentValue, count: count });
+
+            return rle;
+        }
+
+        // ==================== 原有函数 ====================
+
+        function downloadResult() {
+            const link = document.createElement('a');
+            link.download = 'segmentation_result.png';
+            link.href = elements.canvas.toDataURL();
+            link.click();
+        }
+
+        // 加载可用模型列表
+        async function loadAvailableModels() {
+            try {
+                const response = await fetch(`${state.apiUrl}/api/models`);
+                const data = await response.json();
+                
+                const modelSelect = elements.modelSelect;
+                modelSelect.innerHTML = '';  // 清空现有选项
+                
+                if (!data.models || data.models.length === 0) {
+                    modelSelect.innerHTML = '<option>没有可用模型</option>';
+                    modelSelect.disabled = true;
+                    elements.modelStatus.innerHTML = '⚠️ 服务未加载任何模型';
+                    elements.modelStatus.style.color = '#ff6b6b';
+                    return;
+                }
+                
+                // 只显示已加载的模型
+                const loadedModels = data.models.filter(m => m.loaded);
+                
+                if (loadedModels.length === 0) {
+                    modelSelect.innerHTML = '<option>没有已加载的模型</option>';
+                    modelSelect.disabled = true;
+                    elements.modelStatus.innerHTML = '⚠️ 所有模型未加载，请重启服务';
+                    elements.modelStatus.style.color = '#ff6b6b';
+                    return;
+                }
+                
+                // 添加已加载的模型选项
+                loadedModels.forEach((model, index) => {
+                    const option = document.createElement('option');
+                    option.value = model.key;
+                    option.textContent = `${model.name} - ${model.description}`;
+                    if (index === 0) {
+                        option.selected = true;
+                        state.model = model.key;  // 设置默认模型
+                    }
+                    modelSelect.appendChild(option);
+                });
+                
+                modelSelect.disabled = false;
+                
+                // 显示加载状态
+                elements.modelStatus.innerHTML = `✅ 已加载 ${loadedModels.length} 个模型`;
+                elements.modelStatus.style.color = '#51cf66';
+                
+                console.log('可用模型:', loadedModels.map(m => m.key));
+                
+            } catch (error) {
+                console.error('加载模型列表失败:', error);
+                elements.modelSelect.innerHTML = '<option>加载失败</option>';
+                elements.modelSelect.disabled = true;
+                elements.modelStatus.innerHTML = `❌ 无法连接到服务: ${error.message}`;
+                elements.modelStatus.style.color = '#ff6b6b';
+            }
+        }
+        
+        // 初始化
+        console.log('SAM 分割服务前端已加载');
+        
+        // 页面加载时获取可用模型
+        loadAvailableModels();
+    </script>
+</body>
+</html>

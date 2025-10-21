@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SAM API 测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>SAM API 测试工具</h1>
+    
+    <div class="test-section">
+        <h2>1. 测试健康检查</h2>
+        <button onclick="testHealth()">测试 /api/health</button>
+        <pre id="health-result"></pre>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 测试模型列表</h2>
+        <button onclick="testModels()">测试 /api/models</button>
+        <pre id="models-result"></pre>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 测试图像分割</h2>
+        <p>上传图片:</p>
+        <input type="file" id="imageInput" accept="image/*">
+        <br><br>
+        <label>模型: 
+            <select id="modelSelect" disabled>
+                <option>正在加载...</option>
+            </select>
+        </label>
+        <div id="modelStatus" style="margin-top: 8px; font-size: 12px;"></div>
+        <br><br>
+        <button onclick="testSegment()">测试分割 (Auto)</button>
+        <pre id="segment-result"></pre>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        // 加载可用模型列表
+        async function loadAvailableModels() {
+            const modelSelect = document.getElementById('modelSelect');
+            const modelStatus = document.getElementById('modelStatus');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/models`);
+                const data = await response.json();
+                
+                modelSelect.innerHTML = '';  // 清空现有选项
+                
+                if (!data.models || data.models.length === 0) {
+                    modelSelect.innerHTML = '<option>没有可用模型</option>';
+                    modelSelect.disabled = true;
+                    modelStatus.innerHTML = '<span style="color: red;">⚠️ 服务未加载任何模型</span>';
+                    return;
+                }
+                
+                // 只显示已加载的模型
+                const loadedModels = data.models.filter(m => m.loaded);
+                
+                if (loadedModels.length === 0) {
+                    modelSelect.innerHTML = '<option>没有已加载的模型</option>';
+                    modelSelect.disabled = true;
+                    modelStatus.innerHTML = '<span style="color: red;">⚠️ 所有模型未加载</span>';
+                    return;
+                }
+                
+                // 添加已加载的模型选项
+                loadedModels.forEach((model, index) => {
+                    const option = document.createElement('option');
+                    option.value = model.key;
+                    option.textContent = `${model.name} - ${model.description}`;
+                    if (index === 0) {
+                        option.selected = true;
+                    }
+                    modelSelect.appendChild(option);
+                });
+                
+                modelSelect.disabled = false;
+                modelStatus.innerHTML = `<span style="color: green;">✅ 已加载 ${loadedModels.length} 个模型</span>`;
+                
+                console.log('可用模型:', loadedModels.map(m => m.key));
+                
+            } catch (error) {
+                console.error('加载模型列表失败:', error);
+                modelSelect.innerHTML = '<option>加载失败</option>';
+                modelSelect.disabled = true;
+                modelStatus.innerHTML = `<span style="color: red;">❌ 无法连接到服务: ${error.message}</span>`;
+            }
+        }
+        
+        // 页面加载时获取可用模型
+        window.addEventListener('DOMContentLoaded', loadAvailableModels);
+        
+        async function testHealth() {
+            const result = document.getElementById('health-result');
+            try {
+                result.textContent = '正在测试...';
+                const response = await fetch(`${API_BASE}/api/health`);
+                const data = await response.json();
+                result.className = 'success';
+                result.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                result.className = 'error';
+                result.textContent = `错误: ${error.message}`;
+            }
+        }
+        
+        async function testModels() {
+            const result = document.getElementById('models-result');
+            try {
+                result.textContent = '正在测试...';
+                const response = await fetch(`${API_BASE}/api/models`);
+                const data = await response.json();
+                result.className = 'success';
+                result.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                result.className = 'error';
+                result.textContent = `错误: ${error.message}`;
+            }
+        }
+        
+        async function testSegment() {
+            const result = document.getElementById('segment-result');
+            const imageInput = document.getElementById('imageInput');
+            const modelSelect = document.getElementById('modelSelect');
+            
+            if (!imageInput.files || !imageInput.files[0]) {
+                alert('请先选择图片');
+                return;
+            }
+            
+            try {
+                result.textContent = '正在处理...';
+                
+                // 读取图片
+                const file = imageInput.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = async function(e) {
+                    const base64 = e.target.result.split(',')[1];
+                    
+                    const requestData = {
+                        model: modelSelect.value,
+                        image: base64,
+                        prompt_type: 'auto',
+                        alpha: 0.5,
+                        use_tensorrt: true
+                    };
+                    
+                    console.log('发送请求:', requestData);
+                    
+                    const response = await fetch(`${API_BASE}/api/segment`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(requestData)
+                    });
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error || `HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        result.className = 'success';
+                        // 不显示图片数据，只显示元数据
+                        const metadata = {
+                            success: data.success,
+                            performance: data.performance,
+                            model_info: data.model_info,
+                            result_info: data.result.info
+                        };
+                        result.textContent = JSON.stringify(metadata, null, 2);
+                    } else {
+                        result.className = 'error';
+                        result.textContent = `错误: ${data.error}`;
+                    }
+                };
+                
+                reader.readAsDataURL(file);
+                
+            } catch (error) {
+                result.className = 'error';
+                result.textContent = `错误: ${error.message}\n\n${error.stack}`;
+                console.error('详细错误:', error);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+FROM dustynv/l4t-pytorch:r36.4.0
+
+# 创建非 root 用户
+RUN useradd -m appuser
+USER appuser
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制预下载的依赖和wheel文件
+COPY pip_cache ./pip_cache
+COPY onnxruntime_gpu-1.24.0-cp310-cp310-linux_aarch64.whl .
+
+# 验证基础镜像中PyTorch的CUDA支持
+RUN python3 -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda if torch.cuda.is_available() else \"Not available\"}')"
+
+# 离线安装依赖（从本地缓存）
+# 第一批：基础科学计算依赖
+RUN pip install --no-cache-dir --no-index --find-links ./pip_cache \
+    coloredlogs flatbuffers numpy packaging protobuf sympy
+
+# 第二批：应用依赖
+RUN pip install --no-cache-dir --no-index --find-links ./pip_cache \
+    opencv-python==4.10.0.84 flask flask-cors pycuda timm
+
+# 第三批：安装sam-hq（在线安装，但使用--no-deps）
+RUN pip install --no-cache-dir --no-deps \
+    -i https://pypi.tuna.tsinghua.edu.cn/simple \
+    --trusted-host pypi.tuna.tsinghua.edu.cn \
+    git+https://github.com/SysCV/sam-hq.git
+
+# 第四批：安装自编译的onnxruntime-gpu（使用--no-deps避免依赖冲突）
+RUN pip install --no-cache-dir --no-deps /app/onnxruntime_gpu-1.24.0-cp310-cp310-linux_aarch64.whl
+
+# 验证核心依赖导入
+RUN python3 -c "import torch; print(f'✓ PyTorch {torch.__version__} - CUDA: {torch.cuda.is_available()}')"
+RUN python3 -c "import cv2; print(f'✓ OpenCV {cv2.__version__}')"
+RUN python3 -c "import onnxruntime as ort; print(f'✓ ONNX Runtime {ort.__version__} - 提供者: {ort.get_available_providers()}')"
+RUN python3 -c "import flask; import pycuda; print('✓ Flask 和 PyCUDA 导入成功')"
+
+# 复制项目代码和启动脚本
+COPY . .
+
+# 设置环境变量
+ENV ENVIRONMENT=production
+ENV CUDA_VISIBLE_DEVICES=0
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# 暴露端口
+EXPOSE 5001
+
+# 指定容器启动时执行启动脚本（运行时验证CUDA）
+CMD ["/app/start.sh"]
