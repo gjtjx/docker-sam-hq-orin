@@ -7,8 +7,8 @@ from PIL import Image
 from datetime import datetime
 
 # 配置
-SERVER_URL = "https://segmentation.ensightful.xyz"
-IMAGE_PATH = "C:/Users/JietianGUO/Downloads/yujie_images/D_17599118105627208.jpg"#填写路径
+SERVER_URL = ""#填写服务器路径
+IMAGE_PATH = "xx.jpg"#填写路径
 MODEL = "vit_h"
 
 # 读取并编码图片
@@ -82,4 +82,5 @@ if response.status_code == 200:
     print(f"\n所有文件已保存到目录: {output_dir.absolute()}")
 else:
     print(f"错误: {response.status_code}")
+
     print(response.text)
