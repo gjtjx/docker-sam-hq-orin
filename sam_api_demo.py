@@ -19,7 +19,7 @@ with open(IMAGE_PATH, "rb") as f:
 # 请求数据
 data = {
     "model": MODEL,
-    "prompt_type": "point",  # 可选: "auto", "point", "box"
+    "prompt_type": "point",  # 可选: "point", "box"
     "image": image_base64,
     "use_tensorrt": True,
     "alpha": 0.5,
@@ -84,3 +84,4 @@ else:
     print(f"错误: {response.status_code}")
 
     print(response.text)
+
